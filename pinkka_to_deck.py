@@ -19,8 +19,8 @@ BACK_TEMPLATE = """
   <div style="text-align: center">
     <hr id="answer">
     <b>{{ScientificName}}</b><br />
-    {{FinnishName}}<br />
-    <i>{{Pinkka}}</i><br />
+    <b>{{FinnishName}}</b><br />
+    {{Pinkka}}<br />
     <br />
     <button id="showMore" onclick="document.getElementById('moreInfo').style.display = 'block'">Lisatietoja</button><br /><br />
   </div>
@@ -29,8 +29,10 @@ BACK_TEMPLATE = """
 
 FRONT_TEMPLATE = """
   <div style="text-align: center">
-    <img id="plantImage" style="max-height: 500px;" />
-    <br />
+    <div style="height: 450px">
+      <img id="plantImage" style="max-height: 400px;" />
+    </div>
+    <hr />
     <button onclick="changeImage(-1)" id="previousButton">Edellinen</button>
     <button onclick="changeImage(1)" id="nextButton">Seuraava</button>
   </div>
