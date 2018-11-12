@@ -1,33 +1,41 @@
 import requests
-import csv
+import genanki
 import os
-import urllib
 import json
+import sys
 from string import Template
 
-PINKKAS=[160, 161, 162, 163, 164]
+# generated with random.randrange(1 << 30, 1 << 31)
+BASE_UNIQUE_MODEL_ID = 1513242769
+BASE_UNIQUE_DECK_ID = 1646188680
 
 INFO_TEMPLATE = Template("""
   <b>$title</b><br />
   $body
 """)
 
-BACK_TEMPLATE = Template("""
-  <b>$scientificName</b><br />
-  <b>$finnishName</b><br />
-  <b>$pinkka</b><br />
-  <br />
-  <button id="showMore" onclick="document.getElementById('moreInfo').style.display = 'block'">Lisatietoja</button><br /><br />
-  <div id="moreInfo" style="display: none;">$info</div>
-""")
+BACK_TEMPLATE = """
+  {{FrontSide}}
+  <div style="text-align: center">
+    <hr id="answer">
+    <b>{{ScientificName}}</b><br />
+    {{FinnishName}}<br />
+    <i>{{Pinkka}}</i><br />
+    <br />
+    <button id="showMore" onclick="document.getElementById('moreInfo').style.display = 'block'">Lisatietoja</button><br /><br />
+  </div>
+  <div id="moreInfo" style="display: none;">{{Info}}</div>
+"""
 
-FRONT_TEMPLATE = Template("""
-  <img id="plantImage" style="max-height: 400px" />
-  <br />
-  <button onclick="changeImage(-1)" id="previousButton">Edellinen</button>
-  <button onclick="changeImage(1)" id="nextButton">Seuraava</button>
+FRONT_TEMPLATE = """
+  <div style="text-align: center">
+    <img id="plantImage" style="max-height: 500px;" />
+    <br />
+    <button onclick="changeImage(-1)" id="previousButton">Edellinen</button>
+    <button onclick="changeImage(1)" id="nextButton">Seuraava</button>
+  </div>
   <script>
-    var images = $imageArray;
+    var images = {{Images}};
     var selected = 0;
 
     function changeImage(val) {
@@ -63,25 +71,70 @@ FRONT_TEMPLATE = Template("""
       changeImage(0);
     })
   </script>
-""")
+"""
 
-with open('cards.csv', 'wb') as f:
-  writer = csv.writer(f)
+class PinkkaNote(genanki.Note):
+  @property
+  def guid(self):
+    return genanki.guid_for(self.fields[0], self.model.model_id)
 
-  for pinkka in PINKKAS:
-    url = "https://fmnh-ws-prod.it.helsinki.fi/pinkka/api/subpinkkas/" + str(pinkka)
-    pinkkaData = requests.get(url).json()
-    cards = pinkkaData["speciesCards"]
+if __name__ == '__main__':
+  pinkkaId = int(sys.argv[1])
+  filename = sys.argv[2]
+  pinkkaData = requests.get("https://fmnh-ws-prod.it.helsinki.fi/pinkka/api/pinkkas/" + str(pinkkaId)).json()
+  pinkkaName = pinkkaData["name"]["fi"]
+
+  print("Found pinkka with name", pinkkaName)
+
+  ankiModel = genanki.Model(
+    BASE_UNIQUE_MODEL_ID + pinkkaId,
+    'Model for ' + pinkkaName,
+    fields=[
+      {'name': 'ID'},
+      {'name': 'ScientificName'},
+      {'name': 'FinnishName'},
+      {'name': 'Pinkka'},
+      {'name': 'Images'},
+      {'name': 'Info'},
+    ],
+    templates=[
+      {
+        'name': 'Pinkka Card',
+        'qfmt': FRONT_TEMPLATE,
+        'afmt': BACK_TEMPLATE,
+      },
+    ])
+
+  ankiDeck = genanki.Deck(
+    BASE_UNIQUE_DECK_ID + pinkkaId,
+    pinkkaName
+  )
+
+  subPinkkaIds = [subPinkka["id"] for subPinkka in pinkkaData["subPinkkas"]]
+
+  for subPinkkaId in subPinkkaIds:
+    url = "https://fmnh-ws-prod.it.helsinki.fi/pinkka/api/subpinkkas/" + str(subPinkkaId)
+    subPinkkaData = requests.get(url).json()
+    cards = subPinkkaData["speciesCards"]
+    subPinkkaName = subPinkkaData["name"]["fi"]
+    print("Found sub-pinkka", subPinkkaName, "with", len(cards), "cards")
 
     for card in cards:
       cardData = requests.get("https://fmnh-ws-prod.it.helsinki.fi/pinkka/api/speciescards/" + str(card["id"])).json()
       imageUrls = [image["urls"]["large"] for image in cardData["images"]]
-      front = FRONT_TEMPLATE.substitute(imageArray=json.dumps(imageUrls))
-
       finnishName = card['vernacularName']['fi'] if card['vernacularName'] and 'fi' in card['vernacularName'] else ""
       info = ''.join([INFO_TEMPLATE.substitute(title=description["title"]["fi"], body=description["body"]["fi"]) for description in cardData["description"] if "fi" in description["title"] and "fi" in description["body"]])
-      back = BACK_TEMPLATE.substitute(scientificName=card['scientificName'], finnishName=finnishName, pinkka=pinkkaData["name"]["fi"], info=info)
+      
 
-      row = [s.encode("utf-8") for s in [front, back]]
-      writer.writerow(row)
+      note = PinkkaNote(
+        model=ankiModel,
+        fields=[cardData["taxonId"], card['scientificName'], finnishName, subPinkkaName, json.dumps(imageUrls), info],
+        sort_field='FinnishName',
+        tags=[subPinkkaName]
+      )
+
+      ankiDeck.add_note(note)
+
+  print("Writing to file", sys.argv[2])
+  genanki.Package(ankiDeck).write_to_file(sys.argv[2])
 
