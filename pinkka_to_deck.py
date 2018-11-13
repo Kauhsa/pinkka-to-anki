@@ -22,17 +22,17 @@ BACK_TEMPLATE = """
     <b>{{FinnishName}}</b><br />
     {{Pinkka}}<br />
     <br />
-    <button id="showMore" onclick="document.getElementById('moreInfo').style.display = 'block'">Lisatietoja</button><br /><br />
+    <button id="showMore" onclick="document.getElementById('moreInfo').style.display = 'block'; this.style.display = 'none';">Lisatietoja</button>
   </div>
   <div id="moreInfo" style="display: none;">{{Info}}</div>
 """
 
 FRONT_TEMPLATE = """
   <div style="text-align: center">
-    <div style="height: 450px">
-      <img id="plantImage" style="max-height: 400px;" />
+    <div style="height: 400px">
+      <img id="plantImage" style="max-height: 400px" />
     </div>
-    <hr />
+    <div style="height: 10px">&nbsp;</div>
     <button onclick="changeImage(-1)" id="previousButton">Edellinen</button>
     <button onclick="changeImage(1)" id="nextButton">Seuraava</button>
   </div>
